@@ -42,6 +42,42 @@ chmod 600 /etc/xray/certs/key.pem
 chmod 644 /etc/xray/certs/cert.pem
 chown root:root /etc/xray/certs/*
 
+# Проверяем соответствие ключа и сертификата
+KEY_FILE="/etc/xray/certs/key.pem"
+CERT_FILE="/etc/xray/certs/cert.pem"
+
+echo "Проверка соответсвия ключа и сертификата..."
+echo "Файла ключа: $KEY_FILE"
+echo "Файл сертификата: $CERT_FILE"
+echo "---"
+
+KEY_PUB_SHA=$(openssl pkey -in "$KEY_FILE" -pubout -outform PEM 2>/dev/null | openssl sha256)
+CERT_PUB_SHA=$(openssl x509 -in "$CERT_FILE" -pubkey -noout -outform PEM 2>/dev/null | openssl sha256)
+
+if [ -z "$KEY_PUB_SHA" ]; then
+  echo "Ошибка: Не удалось извлечь публичный ключ из файла '$KEY_FILE'."
+  echo "Возможно, файл не существует, поврежден или имеет неверный формат ключа."
+  exit 1
+fi
+
+if [ -z "$CERT_PUB_SHA" ]; then
+  echo "Ошибка: Не удалось извлечь публичный ключ из файла '$CERT_FILE'."
+  echo "Возможно, файл не существует, поврежден или имеет неверный формат ключа."
+  exit 1
+fi
+
+echo "SHA256 хеш публичного ключа (из ключа):       $KEY_PUB_SHA"
+echo "SHA256 хеш публичного ключа (из сертификата):       $CERT_PUB_SHA"
+echo "---"
+
+if [ "$KEY_PUB_SHA" = "$CERT_PUB_SHA" ]; then
+  echo "✅ Хеши совпадают, есть соответствие ключа и сертификата."
+else
+  echo "❌ ВНИМАНИЕ: Хеши не совпадают! Ключ и сертификат не соответсвуют друг другу."
+  echo "Ваш SSL/TLS-сервер не сможет установить безопасное соединение с этим ключом и сертификатом."
+  exit 1
+fi
+
 # Создаем файл конфигурации Xray
 touch /usr/local/etc/xray/config.json
 cat << EOF > /usr/local/etc/xray/config.json
